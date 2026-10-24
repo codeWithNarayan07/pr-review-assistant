@@ -25,5 +25,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ toLower(github.repository) }}:latest
-            ghcr.io/${{ toLower(github.repository) }}:${{ github.sha }}
+            ghcr.io/codewithnarayan07/pr-review-assistant:latest
+            ghcr.io/codewithnarayan07/pr-review-assistant:${{ github.sha }}
