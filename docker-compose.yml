@@ -1,0 +1,81 @@
+# Postgres + Redis + one-shot migration + API + worker.
+# Demo mode (no GitHub account needed): add  --profile demo  to start a fake GitHub too.
+
+x-app: &app
+  build: .
+  image: pr-review-assistant:local
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pr_assistant
+    REDIS_URL: redis://redis:6379/0
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pr_assistant
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pr_assistant"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *app
+    command: alembic upgrade head
+    restart: "no"
+
+  api:
+    <<: *app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: arq worker.tasks.WorkerSettings
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  fake-github:
+    build: .
+    image: pr-review-assistant:local
+    profiles: ["demo"]
+    command: uvicorn scripts.fake_github:app --host 0.0.0.0 --port 9000
+    ports:
+      - "9000:9000"
+
+volumes:
+  pgdata:
