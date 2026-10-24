@@ -1,4 +1,3 @@
-
 """Format review findings into a clean GitHub pull-request comment."""
 
 import re
@@ -64,8 +63,7 @@ def render_comment(
         "",
         f"**Commit reviewed:** `{head_sha[:7]}`",
         "",
-        "*This review is automated. Please verify findings "
-        "and use human judgment before merging.*",
+        "*This review is automated. Please verify findings and use human judgment before merging.*",
     ]
 
     return "\n".join(lines)
