@@ -35,13 +35,15 @@ function App() {
 
     try {
       const [statsResponse, jobsResponse] = await Promise.all([
-        fetch("/api/admin/stats"),
-        fetch("/api/admin/jobs"),
+        fetch("https://pr-review-assistant-api.getvoroa.com/admin/stats"),
+        fetch("https://pr-review-assistant-api.getvoroa.com/admin/jobs"),
       ]);
 
       if (!statsResponse.ok || !jobsResponse.ok) {
         const response = !statsResponse.ok ? statsResponse : jobsResponse;
-        throw new Error(`API request failed (${response.status}). Check the backend and Vite proxy configuration.`);
+        throw new Error(
+          `API request failed (${response.status}). Check the backend and Vite proxy configuration.`,
+        );
       }
 
       const statsData = await statsResponse.json();
@@ -59,9 +61,13 @@ function App() {
         const createdAt = job.created_at ? new Date(job.created_at) : null;
         const result = job.result;
         const resultTitle =
-          (result && typeof result === "object" && (result.title || result.summary)) ||
+          (result &&
+            typeof result === "object" &&
+            (result.title || result.summary)) ||
           job.title ||
-          (job.pr_number ? `Pull request #${job.pr_number}` : `Review job ${job.id ?? index + 1}`);
+          (job.pr_number
+            ? `Pull request #${job.pr_number}`
+            : `Review job ${job.id ?? index + 1}`);
 
         return {
           id: String(job.id ?? index + 1),
@@ -69,9 +75,10 @@ function App() {
           pr: job.pr_number ?? job.pr ?? "—",
           title: String(resultTitle),
           status,
-          time: createdAt && !Number.isNaN(createdAt.getTime())
-            ? createdAt.toLocaleString()
-            : "—",
+          time:
+            createdAt && !Number.isNaN(createdAt.getTime())
+              ? createdAt.toLocaleString()
+              : "—",
           risk: "—",
           sha: job.sha || "",
           attempts: job.attempts ?? 0,
@@ -84,7 +91,9 @@ function App() {
       setJobs(normalizedJobs);
       setNotice("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load dashboard data.");
+      setError(
+        err instanceof Error ? err.message : "Unable to load dashboard data.",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,16 +105,21 @@ function App() {
   }, [loadDashboard]);
 
   const filteredJobs = jobs.filter((job) => {
-    const matchesSearch = `${job.repo} ${job.title} ${job.id} ${job.pr} ${job.sha}`
-      .toLowerCase()
-      .includes(search.toLowerCase());
+    const matchesSearch =
+      `${job.repo} ${job.title} ${job.id} ${job.pr} ${job.sha}`
+        .toLowerCase()
+        .includes(search.toLowerCase());
     return matchesSearch && (filter === "all" || job.status === filter);
   });
 
   const statusCounts = stats?.jobs_by_status || {};
-  const completed = statusCounts.done ?? jobs.filter((job) => job.status === "done").length;
-  const processing = statusCounts.processing ?? jobs.filter((job) => job.status === "processing").length;
-  const failed = statusCounts.failed ?? jobs.filter((job) => job.status === "failed").length;
+  const completed =
+    statusCounts.done ?? jobs.filter((job) => job.status === "done").length;
+  const processing =
+    statusCounts.processing ??
+    jobs.filter((job) => job.status === "processing").length;
+  const failed =
+    statusCounts.failed ?? jobs.filter((job) => job.status === "failed").length;
   const totalJobs = Object.values(statusCounts).reduce(
     (total, count) => total + (Number(count) || 0),
     0,
@@ -190,7 +204,12 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="connection-pill">
-              <i /> {error ? "Connection issue" : loading ? "Connecting…" : "Live API"}
+              <i />{" "}
+              {error
+                ? "Connection issue"
+                : loading
+                  ? "Connecting…"
+                  : "Live API"}
             </span>
             <a
               className="github-button"
@@ -218,7 +237,11 @@ function App() {
                   : `Explore your ${active.toLowerCase()} in the PR Review Assistant workspace.`}
               </p>
             </div>
-            <button className="primary-button" onClick={refreshDemo} disabled={refreshing}>
+            <button
+              className="primary-button"
+              onClick={refreshDemo}
+              disabled={refreshing}
+            >
               <span>↻</span> {refreshing ? "Refreshing…" : "Refresh data"}
             </button>
           </section>
@@ -227,7 +250,11 @@ function App() {
           {error && (
             <div className="notice" role="alert">
               Could not load live data: {error}
-              <button className="text-button" onClick={() => loadDashboard()} style={{ marginLeft: 12 }}>
+              <button
+                className="text-button"
+                onClick={() => loadDashboard()}
+                style={{ marginLeft: 12 }}
+              >
                 Try again
               </button>
             </div>
@@ -236,7 +263,7 @@ function App() {
           <section className="metrics-grid">
             <Metric
               title="Total review jobs"
-              value={loading ? "—" : (totalJobs || jobs.length)}
+              value={loading ? "—" : totalJobs || jobs.length}
               change="From backend"
               icon="↗"
               tone="violet"
@@ -435,9 +462,13 @@ function App() {
             </div>
             <div className="table-footer">
               <span>
-                {loading ? "Loading review jobs…" : `Showing ${filteredJobs.length} of ${jobs.length} review jobs`}
+                {loading
+                  ? "Loading review jobs…"
+                  : `Showing ${filteredJobs.length} of ${jobs.length} review jobs`}
               </span>
-              <span>{error ? "Data may be out of date" : "Connected to backend API"}</span>
+              <span>
+                {error ? "Data may be out of date" : "Connected to backend API"}
+              </span>
             </div>
           </section>
 
