@@ -252,3 +252,5 @@ tests/                    Automated tests
 ## License
 
 Add a `LICENSE` file if you intend to publish this project under an open-source license.
+
+Test PR for PR Review Assistant bot.
