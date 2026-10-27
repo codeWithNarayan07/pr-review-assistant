@@ -27,78 +27,91 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [adminToken, setAdminToken] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
 
-  const loadDashboard = useCallback(async ({ quiet = false } = {}) => {
-    if (quiet) setRefreshing(true);
-    else setLoading(true);
-    setError("");
+  const loadDashboard = useCallback(
+    async ({ quiet = false } = {}) => {
+      if (quiet) setRefreshing(true);
+      else setLoading(true);
+      setError("");
 
-    try {
-      const [statsResponse, jobsResponse] = await Promise.all([
-        fetch("https://pr-review-assistant-api.getvoroa.com/admin/stats"),
-        fetch("https://pr-review-assistant-api.getvoroa.com/admin/jobs"),
-      ]);
+      const headers = {
+        Authorization: `Bearer ${adminToken}`,
+      };
 
-      if (!statsResponse.ok || !jobsResponse.ok) {
-        const response = !statsResponse.ok ? statsResponse : jobsResponse;
-        throw new Error(
-          `API request failed (${response.status}). Check the backend and Vite proxy configuration.`,
+      try {
+        const [statsResponse, jobsResponse] = await Promise.all([
+          fetch("http://localhost:8000/admin/stats", {
+            headers,
+          }),
+          fetch("http://localhost:8000/admin/jobs", {
+            headers,
+          }),
+        ]);
+
+        if (!statsResponse.ok || !jobsResponse.ok) {
+          const response = !statsResponse.ok ? statsResponse : jobsResponse;
+          throw new Error(
+            `API request failed (${response.status}). Check the backend and Vite proxy configuration.`,
+          );
+        }
+
+        const statsData = await statsResponse.json();
+        const jobsData = await jobsResponse.json();
+        const rawJobs = Array.isArray(jobsData)
+          ? jobsData
+          : Array.isArray(jobsData.jobs)
+            ? jobsData.jobs
+            : Array.isArray(jobsData.items)
+              ? jobsData.items
+              : [];
+
+        const normalizedJobs = rawJobs.map((job, index) => {
+          const status = String(job.status || "pending").toLowerCase();
+          const createdAt = job.created_at ? new Date(job.created_at) : null;
+          const result = job.result;
+          const resultTitle =
+            (result &&
+              typeof result === "object" &&
+              (result.title || result.summary)) ||
+            job.title ||
+            (job.pr_number
+              ? `Pull request #${job.pr_number}`
+              : `Review job ${job.id ?? index + 1}`);
+
+          return {
+            id: String(job.id ?? index + 1),
+            repo: job.repo || job.repository || "Unknown repository",
+            pr: job.pr_number ?? job.pr ?? "—",
+            title: String(resultTitle),
+            status,
+            time:
+              createdAt && !Number.isNaN(createdAt.getTime())
+                ? createdAt.toLocaleString()
+                : "—",
+            risk: "—",
+            sha: job.sha || "",
+            attempts: job.attempts ?? 0,
+            error: job.error || "",
+            result,
+          };
+        });
+
+        setStats(statsData);
+        setJobs(normalizedJobs);
+        setNotice("");
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Unable to load dashboard data.",
         );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      const statsData = await statsResponse.json();
-      const jobsData = await jobsResponse.json();
-      const rawJobs = Array.isArray(jobsData)
-        ? jobsData
-        : Array.isArray(jobsData.jobs)
-          ? jobsData.jobs
-          : Array.isArray(jobsData.items)
-            ? jobsData.items
-            : [];
-
-      const normalizedJobs = rawJobs.map((job, index) => {
-        const status = String(job.status || "pending").toLowerCase();
-        const createdAt = job.created_at ? new Date(job.created_at) : null;
-        const result = job.result;
-        const resultTitle =
-          (result &&
-            typeof result === "object" &&
-            (result.title || result.summary)) ||
-          job.title ||
-          (job.pr_number
-            ? `Pull request #${job.pr_number}`
-            : `Review job ${job.id ?? index + 1}`);
-
-        return {
-          id: String(job.id ?? index + 1),
-          repo: job.repo || job.repository || "Unknown repository",
-          pr: job.pr_number ?? job.pr ?? "—",
-          title: String(resultTitle),
-          status,
-          time:
-            createdAt && !Number.isNaN(createdAt.getTime())
-              ? createdAt.toLocaleString()
-              : "—",
-          risk: "—",
-          sha: job.sha || "",
-          attempts: job.attempts ?? 0,
-          error: job.error || "",
-          result,
-        };
-      });
-
-      setStats(statsData);
-      setJobs(normalizedJobs);
-      setNotice("");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to load dashboard data.",
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+    },
+    [adminToken],
+  );
 
   useEffect(() => {
     loadDashboard();
@@ -261,6 +274,30 @@ function App() {
           )}
 
           <section className="metrics-grid">
+            <section className="token-panel">
+              <label htmlFor="admin-token">Admin API token</label>
+              <div className="token-controls">
+                <input
+                  id="admin-token"
+                  type="password"
+                  value={tokenInput}
+                  onChange={(event) => setTokenInput(event.target.value)}
+                  placeholder="Enter your ADMIN_TOKEN"
+                  autoComplete="off"
+                />
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    setAdminToken(tokenInput.trim());
+                    setNotice("Admin token updated. Loading dashboard...");
+                  }}
+                >
+                  Connect
+                </button>
+              </div>
+              <p>Enter the backend ADMIN_TOKEN to load live review data.</p>
+            </section>
+
             <Metric
               title="Total review jobs"
               value={loading ? "—" : totalJobs || jobs.length}
