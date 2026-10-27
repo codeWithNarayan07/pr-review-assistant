@@ -3,6 +3,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import admin, health, webhook
 from app.config import Settings, get_settings
@@ -39,6 +40,19 @@ def create_app(settings: Settings | None = None, queue=None, sessionmaker=None) 
             await engine.dispose()
 
     app = FastAPI(title="PR Review Assistant", version="1.0.0", lifespan=lifespan)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://pr-review-assistant-frontend.getvoroa.com",
+        ],
+        allow_credentials=False,
+        allow_methods=["GET", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    )
+    
     app.state.settings = settings
     app.state.queue = queue
     app.state.sessionmaker = sessionmaker
