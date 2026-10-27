@@ -35,10 +35,7 @@ def main() -> None:
         "--secret",
         default=os.environ.get("GITHUB_WEBHOOK_SECRET") or _secret_from_env_file() or "demo-secret",
     )
-    p.add_argument(
-        "--repo", 
-        default="codeWithNarayan07/pr-review-assistant-test"
-    )
+    p.add_argument("--repo", default="codeWithNarayan07/pr-review-assistant-test")
     p.add_argument("--pr", type=int, default=1)
     p.add_argument("--sha", default=DEMO_SHA)
     p.add_argument("--action", default="opened")

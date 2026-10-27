@@ -1,9 +1,9 @@
-
 """add review risk details
 
 Revision ID: 38b07dfcb57a
 Revises: 0001
 """
+
 import sqlalchemy as sa
 from alembic import op
 

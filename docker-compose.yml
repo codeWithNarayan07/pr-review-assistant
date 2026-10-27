@@ -5,6 +5,8 @@ x-app: &app
   build: .
   image: pr-review-assistant:local
   env_file: .env
+  volumes:
+    - ./secrets/github-app-private-key.pem:/run/secrets/github-app-private-key.pem:ro
   environment:
     DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pr_assistant
     REDIS_URL: redis://redis:6379/0

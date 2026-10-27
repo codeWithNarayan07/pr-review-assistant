@@ -1,4 +1,3 @@
-
 """The review itself: fetch the PR, analyse it, ask the LLM, post/update one comment."""
 
 import logging
@@ -58,9 +57,7 @@ async def run_review(
     if existing and existing.last_head_sha == sha:
         return "skipped:already_reviewed"
 
-    files, truncated = await gh.list_pull_files(
-        repo, number, settings.max_files_fetched
-    )
+    files, truncated = await gh.list_pull_files(repo, number, settings.max_files_fetched)
 
     # Never send credentials to the LLM: redact every patch first.
     secrets_found = 0
@@ -76,10 +73,7 @@ async def run_review(
         extra_ignore=config.ignore_paths,
     )
 
-    relevant = [
-        f for f in files
-        if not diff_utils.is_ignored(f.path, config.ignore_paths)
-    ]
+    relevant = [f for f in files if not diff_utils.is_ignored(f.path, config.ignore_paths)]
     report = risk_rules.analyze(
         relevant,
         large_pr_lines=settings.large_pr_lines,
@@ -93,8 +87,7 @@ async def run_review(
         title=pr.get("title") or "",
         description=redact(pr.get("body") or "")[0],
         files_summary="\n".join(
-            f"{f.path} ({f.status}, +{f.additions}/-{f.deletions})"
-            for f in relevant[:100]
+            f"{f.path} ({f.status}, +{f.additions}/-{f.deletions})" for f in relevant[:100]
         ),
         diff_text=prepared.text,
     )
@@ -106,24 +99,15 @@ async def run_review(
         except LLMError:
             if not final_attempt:
                 raise
-            notes.append(
-                "The AI summary was unavailable; showing automated checks only."
-            )
+            notes.append("The AI summary was unavailable; showing automated checks only.")
 
     if truncated:
-        notes.append(
-            f"Only the first {settings.max_files_fetched} changed files were analysed."
-        )
+        notes.append(f"Only the first {settings.max_files_fetched} changed files were analysed.")
     if prepared.omitted:
-        notes.append(
-            f"{len(prepared.omitted)} file(s) were too large or had no diff to analyse."
-        )
+        notes.append(f"{len(prepared.omitted)} file(s) were too large or had no diff to analyse.")
 
     rule_risks = [r.message for r in report.risks]
-    llm_risks = [
-        r for r in (review.risks if review else [])
-        if r not in rule_risks
-    ]
+    llm_risks = [r for r in (review.risks if review else []) if r not in rule_risks]
     all_risks = rule_risks + llm_risks
 
     high_risk_markers = {
@@ -165,9 +149,7 @@ async def run_review(
         notes=notes,
     )
 
-    return await _upsert_comment(
-        session, gh, existing, repo, number, sha, body
-    )
+    return await _upsert_comment(session, gh, existing, repo, number, sha, body)
 
 
 async def _upsert_comment(
@@ -184,13 +166,9 @@ async def _upsert_comment(
 
     if comment_id is None:
         # The database has no record: maybe we commented before a crash.
-        comment_id = await gh.find_comment_with_marker(
-            repo, number, formatter.MARKER
-        )
+        comment_id = await gh.find_comment_with_marker(repo, number, formatter.MARKER)
 
-    if comment_id is not None and not await gh.update_comment(
-        repo, comment_id, body
-    ):
+    if comment_id is not None and not await gh.update_comment(repo, comment_id, body):
         comment_id = None  # A human deleted it; post a fresh one.
 
     if comment_id is None:
