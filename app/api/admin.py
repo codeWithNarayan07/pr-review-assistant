@@ -1,4 +1,3 @@
-
 """Read-only job statistics. Disabled (404) unless ADMIN_TOKEN is set."""
 
 import hmac
@@ -27,9 +26,7 @@ def require_admin(
 @router.get("/stats", dependencies=[Depends(require_admin)])
 async def stats(session: AsyncSession = Depends(get_session)):
     rows = (
-        await session.execute(
-            select(ReviewJob.status, func.count()).group_by(ReviewJob.status)
-        )
+        await session.execute(select(ReviewJob.status, func.count()).group_by(ReviewJob.status))
     ).all()
 
     counts = {status: 0 for status in (s.value for s in JobStatus)}
@@ -57,9 +54,7 @@ async def stats(session: AsyncSession = Depends(get_session)):
 @router.get("/jobs", dependencies=[Depends(require_admin)])
 async def jobs(limit: int = 50, session: AsyncSession = Depends(get_session)):
     result = await session.scalars(
-        select(ReviewJob)
-        .order_by(ReviewJob.id.desc())
-        .limit(min(max(limit, 1), 200))
+        select(ReviewJob).order_by(ReviewJob.id.desc()).limit(min(max(limit, 1), 200))
     )
 
     return [

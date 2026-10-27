@@ -52,7 +52,7 @@ def create_app(settings: Settings | None = None, queue=None, sessionmaker=None) 
         allow_methods=["GET", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
-    
+
     app.state.settings = settings
     app.state.queue = queue
     app.state.sessionmaker = sessionmaker
