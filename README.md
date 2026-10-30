@@ -1,260 +1,285 @@
 # PR Review Assistant
 
-A GitHub bot that reviews pull requests and maintains **one up-to-date review comment** containing a summary, potential risks, and a checklist for the human reviewer.
+An automated GitHub Pull Request review bot that helps developers identify potential code risks and receive structured feedback directly on their pull requests.
 
-It is built with FastAPI, PostgreSQL, Redis, ARQ, and a React/Vite dashboard. Rule-based checks work without an LLM; an optional Anthropic integration can add an AI-generated summary.
-
-## How it works
-
-```text
-GitHub ──webhook──▶ FastAPI ──▶ PostgreSQL (jobs and deduplication)
-                       │
-                       └──▶ Redis queue ──▶ ARQ worker ──▶ GitHub API (fetch diff)
-                                                   │
-                                                   ├──▶ Rule-based risk checks
-                                                   ├──▶ Optional LLM analysis
-                                                   └──▶ Create/update one PR comment
-
-React/Vite dashboard ──▶ FastAPI admin endpoints
-```
+PR Review Assistant integrates with GitHub through a GitHub App, processes webhook events asynchronously, and publishes review comments without blocking webhook delivery.
 
 ## Features
 
-- Verifies GitHub webhook signatures using HMAC SHA-256.
-- Deduplicates webhook deliveries and review jobs.
-- Flags sensitive or high-risk changes, including authentication, payments, migrations, CI/infra, dependencies, secrets, missing tests, and unusually large pull requests.
-- Filters noisy files such as lock files, images, minified files, and generated files.
-- Redacts credentials before sending diffs to an LLM.
-- Treats pull-request text as untrusted input and validates LLM output.
-- Retries failed jobs with backoff and falls back to rule-based findings if the LLM fails.
-- Updates the existing bot comment when a new commit arrives instead of posting a duplicate.
-- Provides admin endpoints for job statistics and job inspection.
-- Includes a React/Vite dashboard for viewing review-job activity.
-- Supports a fake GitHub service for local demos without a real GitHub account or API token.
+- **GitHub App integration** — Connects to GitHub repositories using App authentication.
+- **Webhook signature verification** — Validates incoming GitHub webhook requests.
+- **Asynchronous processing** — Uses Redis and ARQ to process review jobs in the background.
+- **Duplicate job prevention** — Prevents duplicate processing of webhook deliveries.
+- **Automated code-risk checks** — Identifies potential risks and generates structured review feedback.
+- **Review checklists** — Provides developers with actionable review points.
+- **Comment updates** — Updates existing review comments when new commits are pushed to a pull request.
+- **Dashboard** — Provides a frontend interface for viewing review activity and job information.
 
-## Tech stack
+## Tech Stack
 
-- **Backend:** Python, FastAPI, SQLAlchemy, Alembic
-- **Database:** PostgreSQL
-- **Queue and worker:** Redis, ARQ
-- **Frontend:** React, Vite
-- **Testing and linting:** pytest, Ruff
-- **Optional AI:** Anthropic API
+| Component           | Technology             |
+| ------------------- | ---------------------- |
+| Backend API         | Python, FastAPI        |
+| Frontend            | React 19, Vite         |
+| Database            | PostgreSQL             |
+| ORM                 | SQLAlchemy             |
+| Database migrations | Alembic                |
+| Background jobs     | ARQ                    |
+| Message broker      | Redis                  |
+| GitHub integration  | GitHub Apps, Webhooks  |
+| Containers          | Docker, Docker Compose |
+| Testing             | Pytest                 |
+| Code quality        | Ruff, Oxlint           |
 
-## Prerequisites
+## Architecture
 
-For the Docker workflow, install Docker Desktop with Docker Compose. Python 3 is needed to run the test-webhook script. Node.js and npm are needed to run the frontend locally outside Docker.
+flowchart TD
+A[GitHub Pull Request] --> B[GitHub Webhook]
+B --> C[FastAPI API]
+C --> D[Signature Verification]
+D --> E[Duplicate Job Prevention]
+E --> F[Redis Job Queue]
+F --> G[ARQ Worker]
+G --> H[Automated Code Risk Checks]
+G --> I[PostgreSQL]
+G --> J[GitHub API]
+J --> K[Review Comment]
+L[React Dashboard] --> M[Admin API]
+M --> C
 
-## Quick start: local Docker demo
+## Project Structure
 
-The demo uses the fake GitHub service and disables LLM calls. No GitHub credentials or AI API key are required.
-
-From the repository root:
-
-```powershell
-Copy-Item .env.demo .env
-docker compose --profile demo up --build
+```text
+pr-review-assistant/
+├── .github/
+│   └── workflows/
+├── app/
+│   ├── api/
+│   ├── services/
+│   ├── config.py
+│   └── main.py
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   └── package.json
+├── migrations/
+├── scripts/
+├── secrets/                 # Local GitHub App private key (not committed)
+├── tests/
+├── worker/
+├── .env.example
+├── .gitignore
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
 ```
 
-Wait for the API and worker containers to start. In a second terminal, from the repository root, send a test webhook:
+## Getting Started
 
-```powershell
-py scripts\send_test_webhook.py
+### Prerequisites
+
+- Git
+- Docker Desktop with Docker Compose
+- Node.js and npm (for local frontend development)
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/codeWithNarayan07/pr-review-assistant.git
+cd pr-review-assistant
 ```
 
-Useful local URLs:
+### 2. Configure environment variables
 
-- API health: http://localhost:8000/health
-- API documentation: http://localhost:8000/docs
-- Fake GitHub comments: http://localhost:9000/_debug/comments
-
-Try sending the same test webhook again; the duplicate should be ignored. You can also test signature validation:
+Copy the example environment file:
 
 ```powershell
-py scripts\send_test_webhook.py --secret wrong
+Copy-Item .env.example .env
 ```
 
-That request should be rejected with `401 Invalid signature`.
+Configure the required values in `.env`:
 
-Stop the demo with `Ctrl+C`, then run:
+```env
+ENVIRONMENT=development
+LOG_LEVEL=INFO
 
-```powershell
-docker compose --profile demo down
+GITHUB_WEBHOOK_SECRET=your-long-random-webhook-secret
+
+GITHUB_APP_ID=your-github-app-id
+GITHUB_APP_PRIVATE_KEY=/run/secrets/github-app-private-key.pem
+
+LLM_PROVIDER=none
+ADMIN_TOKEN=your-admin-token
 ```
 
-Add `-v` only if you intentionally want to delete the database volume and its stored data.
+### GitHub App Setup
 
-## Run the dashboard locally
+1. Create and configure a GitHub App.
+2. Grant the required repository permissions:
+   - Issues: Read and write
+   - Pull requests: Read and write
+   - Contents: Read-only
+   - Metadata: Read-only
+3. Configure the required pull request webhook events.
+4. Generate and download the App's private key.
 
-The dashboard is in `frontend/`. Start the backend services from the repository root:
+Create the local secrets directory:
 
 ```powershell
+New-Item -ItemType Directory -Force .\secrets
+```
+
+Place the downloaded private key at:
+
+```text
+secrets/github-app-private-key.pem
+```
+
+Configure the following values in `.env`:
+
+```env
+GITHUB_APP_ID=your-github-app-id
+GITHUB_APP_PRIVATE_KEY=/run/secrets/github-app-private-key.pem
+GITHUB_WEBHOOK_SECRET=your-long-random-webhook-secret
+```
+
+Configure the GitHub App webhook URL to use your publicly reachable endpoint:
+
+```text
+https://your-domain.com/webhook/github
+```
+
+Use the same webhook secret in GitHub and `.env`.
+
+**Security:** Never commit `.env`, private keys, access tokens, or webhook secrets.
+
+### 3. Start the application
+
+```bash
 docker compose up -d --build
+```
+
+Docker Compose starts PostgreSQL, Redis, runs database migrations, and starts the API and background worker.
+
+### 4. Check application status
+
+```bash
 docker compose ps
 ```
 
-Confirm that the API, database, Redis, and worker are running. Then open a **separate terminal**:
+Check API health:
 
-```powershell
+```text
+http://localhost:8000/health
+```
+
+### 5. Access the frontend
+
+For local frontend development:
+
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Open the local Vite URL printed in the terminal, usually http://localhost:5173.
+Open the URL printed by Vite in your terminal.
 
-The dashboard calls the local API at `http://localhost:8000`. When prompted for the admin token, use the `ADMIN_TOKEN` configured for your local environment. To read the value from the running API container without putting it in source control:
+### 6. Optional: Start demo mode
 
-```powershell
-# Run this from the repository root. Keep the output private.
-docker compose exec api python -c "import os; print(os.environ['ADMIN_TOKEN'])"
+To start the fake GitHub service:
+
+```bash
+docker compose --profile demo up -d --build
 ```
 
-Paste the token into the dashboard's token field. Do not commit the token or share it publicly. If the dashboard cannot reach the API, check that the containers are healthy, the API is available at port 8000, and the browser origin is allowed by the API's CORS configuration.
+The fake GitHub service is available at:
 
-To create a production frontend bundle:
+```text
+http://localhost:9000
+```
 
-```powershell
+### Useful Docker commands
+
+```bash
+docker compose logs -f api
+docker compose logs -f worker
+docker compose logs -f db
+docker compose down
+```
+
+To stop the application without deleting persistent database data, use `docker compose down`. Avoid `-v` unless you intentionally want to remove the database volume.
+
+## Testing
+
+### Backend tests
+
+```bash
+pytest
+```
+
+### Backend linting
+
+```bash
+ruff check .
+```
+
+### Backend formatting check
+
+```bash
+ruff format --check .
+```
+
+### Frontend build
+
+```bash
 cd frontend
 npm run build
 ```
 
-The generated files are written to `frontend/dist/`.
+### Frontend lint
 
-## Run tests and code checks
-
-From the repository root:
-
-```powershell
-python -m pytest -v
-ruff check .
-ruff format --check .
+```bash
+npm run lint
 ```
 
-The test suite uses test doubles and SQLite where applicable, so the unit tests do not require a live GitHub repository or LLM credentials. The project was locally verified with **69 passing tests**, Ruff checks passing, and a successful Vite production build.
+## GitHub Integration
 
-## Connect a real GitHub repository
+The project uses a GitHub App to receive pull request webhook events.
 
-This is an optional integration step. It is not needed for the local demo.
+The workflow:
 
-1. Make the API reachable by GitHub using a secure public HTTPS endpoint or webhook relay.
-2. Create a fine-grained personal access token scoped to the test repository. Grant only the permissions the bot needs, including pull-request read/write and contents read.
-3. Copy `.env.example` to `.env` and configure the webhook secret, GitHub credentials, and an `ALLOWED_REPOS` entry for the repository you want to permit.
-4. Start the regular Compose services:
+1. A developer opens or updates a pull request.
+2. GitHub sends a webhook event to the FastAPI application.
+3. The application verifies the webhook signature.
+4. A review job is queued for background processing.
+5. The ARQ worker performs automated code-risk checks.
+6. The bot publishes a review comment on the pull request.
+7. When new commits arrive, the existing review comment can be updated.
 
-   ```powershell
-   docker compose up --build
-   ```
+## Project Validation
 
-5. In the GitHub repository, open **Settings → Webhooks → Add webhook**:
-   - Payload URL: `https://<your-public-host>/webhook/github`
-   - Content type: `application/json`
-   - Secret: the same value as `GITHUB_WEBHOOK_SECRET`
-   - Event: **Pull requests**
+The following checks have passed during development:
 
-6. Verify the webhook delivery, then open a test pull request and inspect the bot's comment and worker logs.
+- 69 backend tests passed.
+- Ruff lint checks passed.
+- Ruff formatting checks passed.
+- Frontend production build completed successfully.
+- Frontend lint completed with one warning and zero errors.
+- Live GitHub App webhook integration tested successfully.
+- Review comments successfully created and updated after new commits.
 
-Treat webhook secrets, GitHub tokens, admin tokens, and AI keys as credentials. Never commit `.env` or paste secrets into issues or screenshots. A GitHub App can be used instead of a personal access token if the application credentials and permissions are configured.
+## Future Improvements
 
-## Optional AI summaries
+- AI-powered code review assistance.
+- Expanded review analysis and reporting.
+- Additional dashboard capabilities.
 
-The bot supports rule-based reviews without an LLM. To enable Anthropic, configure the following in `.env`:
+## Author
 
-```dotenv
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=<your-key>
-LLM_MODEL=claude-haiku-5-5
-```
+**Narayan Ammannavar**
 
-Use a valid model identifier supported by your configured Anthropic account. Restart the API and worker after changing environment variables. Review the provider's pricing and limits before enabling AI calls. The application limits the amount of diff text sent for analysis.
+GitHub: [@codeWithNarayan07](https://github.com/codeWithNarayan07)
 
-## Optional per-repository settings
-
-A reviewed repository can include a `.pr-assistant.yml` file at its root:
-
-```yaml
-enabled: true
-ignore_paths:
-  - "docs/*"
-  - "*.generated.ts"
-extra_checklist:
-  - "Update the changelog"
-custom_risks:
-  - pattern: "src/payments/*"
-    message: "Owned by the payments team - tag them"
-```
-
-## Configuration reference
-
-Configure these values in `.env`. Defaults can vary with the selected Compose profile and environment; use `.env.example` and `.env.demo` as the authoritative starting points for this checkout.
-
-| Variable | Purpose |
-|---|---|
-| `GITHUB_WEBHOOK_SECRET` | Shared secret used to verify webhook signatures. |
-| `GITHUB_TOKEN` | GitHub personal access token, if using token-based authentication. |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` | Optional GitHub App credentials. |
-| `GITHUB_API_URL` | GitHub API base URL; useful for compatible test servers. |
-| `ALLOWED_REPOS` | Optional comma-separated allowlist of `owner/repo` names. |
-| `SKIP_DRAFT_PRS` | Whether draft pull requests are skipped. |
-| `LLM_PROVIDER` | `none` for rule-only reviews, or `anthropic` for AI summaries. |
-| `ANTHROPIC_API_KEY`, `LLM_MODEL` | Credentials and model identifier for Anthropic. |
-| `DATABASE_URL` | SQLAlchemy database connection URL. |
-| `REDIS_URL` | Redis connection URL used by the job queue. |
-| `MAX_JOB_ATTEMPTS` | Maximum number of job attempts. |
-| `MAX_DIFF_CHARS`, `MAX_CHARS_PER_FILE` | Limits on diff content considered for review. |
-| `LARGE_PR_LINES`, `LARGE_PR_FILES` | Thresholds used to flag large pull requests. |
-| `RATE_LIMIT_PER_MINUTE` | Webhook endpoint rate limit. |
-| `ADMIN_TOKEN` | Protects admin endpoints such as `/admin/stats` and `/admin/jobs`. |
-| `LOG_LEVEL` | Application logging level. |
-
-## Project layout
-
-```text
-app/
-  main.py                 FastAPI app, middleware, and lifespan
-  config.py               Environment-based settings
-  models.py               Database models
-  api/                    Webhook, health, and admin endpoints
-  services/
-    security.py           Webhook signature verification
-    github_auth.py        GitHub token and app authentication
-    github_client.py      GitHub API calls
-    risk_rules.py         Rule-based checks
-    diff_utils.py         Diff filtering and size limits
-    secret_redaction.py   Credential redaction
-    llm_client.py         Optional LLM integration and validation
-    formatter.py          Review-comment formatting
-    review_pipeline.py    Review and comment workflow
-    job_runner.py         Job status, retries, and backoff
-  queue.py                Redis/ARQ queue integration
-worker/
-  tasks.py                ARQ worker entry point
-frontend/                 React/Vite dashboard
-migrations/               Alembic database migrations
-scripts/                  Fake GitHub service and test webhook sender
-tests/                    Automated tests
-.github/workflows/        CI and image-release workflows
-```
-
-## Troubleshooting
-
-| Symptom | What to check |
-|---|---|
-| `401 Invalid signature` | The GitHub webhook secret must match `GITHUB_WEBHOOK_SECRET`. |
-| Webhook returns `202` but no comment appears | Check `docker compose logs worker`, repository permissions, and `ALLOWED_REPOS`. |
-| A draft PR is ignored | Check `SKIP_DRAFT_PRS` and mark the PR ready if appropriate. |
-| `GITHUB_WEBHOOK_SECRET must be set` | Create `.env` from `.env.demo` for the demo or `.env.example` for a real integration. |
-| A port is already allocated | Check ports 8000, 5173, 5432, 6379, and 9000, then stop the conflicting process or update the relevant configuration. |
-| Dashboard cannot load data | Confirm the API is healthy at `http://localhost:8000`, enter the correct local `ADMIN_TOKEN`, and check CORS settings. |
-| A job is marked failed | Inspect the worker logs and the authenticated `GET /admin/jobs` endpoint. |
-| The public webhook URL changed | Update the webhook's payload URL in GitHub. |
-
-## License
-
-Add a `LICENSE` file if you intend to publish this project under an open-source license.
-
-Test PR for PR Review Assistant bot.
-
-<!-- webhook re-test: 2026-10-30 -->
-
-<!-- Test: verify review comment updates on new commits -->
+LinkedIn: [narayan-ammannavar](https://www.linkedin.com/in/narayan-ammannavar/)
