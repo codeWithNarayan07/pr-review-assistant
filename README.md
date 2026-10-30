@@ -256,3 +256,5 @@ Add a `LICENSE` file if you intend to publish this project under an open-source 
 Test PR for PR Review Assistant bot.
 
 <!-- webhook re-test: 2026-10-30 -->
+
+<!-- Test: verify review comment updates on new commits -->
