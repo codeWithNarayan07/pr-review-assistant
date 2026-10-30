@@ -42,10 +42,10 @@ function App() {
 
       try {
         const [statsResponse, jobsResponse] = await Promise.all([
-          fetch("http://localhost:8000/admin/stats", {
+          fetch("/api/admin/stats", {
             headers,
           }),
-          fetch("http://localhost:8000/admin/jobs", {
+          fetch("/api/admin/jobs", {
             headers,
           }),
         ]);
@@ -100,7 +100,6 @@ function App() {
 
         setStats(statsData);
         setJobs(normalizedJobs);
-        setNotice("");
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Unable to load dashboard data.",
@@ -259,7 +258,12 @@ function App() {
             </button>
           </section>
 
-          {notice && <div className="notice">{notice}</div>}
+          {notice && (
+            <div className="notice" role="status">
+              {notice}
+            </div>
+          )}
+
           {error && (
             <div className="notice" role="alert">
               Could not load live data: {error}
@@ -272,7 +276,6 @@ function App() {
               </button>
             </div>
           )}
-
           <section className="metrics-grid">
             <section className="token-panel">
               <label htmlFor="admin-token">Admin API token</label>
@@ -327,7 +330,6 @@ function App() {
               tone="orange"
             />
           </section>
-
           <section className="hero-panel">
             <div className="hero-copy">
               <div className="hero-tag">
@@ -394,7 +396,6 @@ function App() {
               </div>
             </div>
           </section>
-
           <section className="jobs-section">
             <div className="section-heading">
               <div>
@@ -475,11 +476,9 @@ function App() {
                       <td>
                         <button
                           className="more-button"
-                          onClick={() =>
-                            setNotice(
-                              `${job.id}: ${job.title} | Status: ${job.status} | Attempts: ${job.attempts}${job.error ? ` | Error: ${job.error}` : ""}${job.sha ? ` | Commit: ${job.sha}` : ""}`,
-                            )
-                          }
+                          onClick={() => {
+                            setNotice(`Clicked job ${job.id}: ${job.title}`);
+                          }}
                           aria-label={`Details for ${job.id}`}
                         >
                           •••
@@ -508,7 +507,6 @@ function App() {
               </span>
             </div>
           </section>
-
           <footer className="page-footer">
             <span>
               PR Review Assistant <span className="footer-dot">•</span> v1.0.0
